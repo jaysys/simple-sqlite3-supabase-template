@@ -1,0 +1,1 @@
+# simple-sqlite3-supabase-template
