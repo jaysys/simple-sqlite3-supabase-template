@@ -53,6 +53,7 @@ def use_case_02():
         # Print the results
         for row in result_set:
             print(row)
+            print(row[0], row[2])
 
 if __name__ == "__main__":
     print("=-"*10,"start!")
