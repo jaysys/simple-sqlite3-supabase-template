@@ -12,13 +12,13 @@ with engine.connect() as connection:
     select_query = """
         SELECT * 
         FROM my_asset 
-        ORDER BY "timestamp" DESC, "index" ASC 
+        ORDER BY timestamp DESC, index ASC 
         LIMIT 10
     """
     
     # Execute the query
-    result = connection.execute(text(select_query))
+    result_set = connection.execute(text(select_query))
     
     # Print the results
-    for row in result:
+    for row in result_set:
         print(row)
