@@ -4,6 +4,31 @@ from sqlalchemy import create_engine, text
 
 CONNECTION_STRING = "postgresql://postgres.ju~~~~md:F26~passwd~~o@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres"
 
+if False:
+    # Create an engine
+    engine = create_engine(CONNECTION_STRING)
+    conn = engine.connect()
+    meta = MetaData()
+    meta.reflect(bind=engine)
+
+    # 테이블 목록 가져오기
+    def get_table_names(meta=meta):
+        table_names = meta.tables.keys()
+        print("테이블 목록:")
+        for table_name in table_names:
+            print(table_name)
+
+    # 테이블 스키마 가져오기
+    def get_table_schema(table_name, meta=meta):
+        table = meta.tables.get(table_name)
+        if table is not None:
+            print(f"테이블 '{table_name}'의 스키마:")
+            for column in table.columns:
+                print(f"{column.name}: {column.type}")
+        else:
+            print(f"테이블 '{table_name}'가 존재하지 않습니다.")
+
+
 def conn_db_and_exec_query(stmt):
     engine = create_engine(CONNECTION_STRING)    
     with engine.connect() as conn:
