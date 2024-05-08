@@ -27,7 +27,8 @@ if False:
                 print(f"{column.name}: {column.type}")
         else:
             print(f"테이블 '{table_name}'가 존재하지 않습니다.")
-
+    get_table_names()  # 모든 테이블 목록 출력
+    get_table_schema("my_asset")  # 특정 테이블의 스키마 출력
 
 def conn_db_and_exec_query(stmt):
     engine = create_engine(CONNECTION_STRING)    
