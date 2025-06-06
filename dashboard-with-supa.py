@@ -51,11 +51,11 @@ def get_engine():
 
 # Fetch data
 @st.cache_data(ttl=300)  # Cache for 5 minutes
-def fetch_asset_history(days=30):
+def fetch_asset_history(days):
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
     
     with get_engine().connect() as conn:
-        # Using direct parameter binding with f-string for the date
+        # Fetch all data points for the selected date range
         query = f"""
             SELECT timestamp, total
             FROM asset_total_history_report 
@@ -69,12 +69,57 @@ def fetch_asset_history(days=30):
         df = df.set_index('timestamp')
     return df
 
+def resample_data(df, days):
+    """Resample data based on the selected time range with proportional scaling
+    
+    Args:
+        df: DataFrame with timestamp index and total values
+        days: Number of days in the selected date range
+        
+    Returns:
+        tuple: (resampled_data, timeframe_string)
+    """
+    # Calculate the timeframe in minutes (proportional to days, min 30min, max 1440min/24h)
+    max_days = 90  # Maximum days for scaling
+    min_minutes = 30  # Minimum timeframe in minutes
+    max_minutes = 24 * 60  # Maximum timeframe in minutes (24 hours)
+    
+    # Calculate proportional minutes (linear scaling between min and max)
+    if days <= 1:
+        minutes = min_minutes  # Minimum 30 minutes for very short ranges
+    else:
+        # Scale proportionally between min and max minutes based on days
+        ratio = min(days / max_days, 1.0)  # Cap at 1.0 for ranges > max_days
+        minutes = min_minutes + (max_minutes - min_minutes) * ratio
+    
+    # Convert to nearest standard timeframe
+    if minutes < 60:  # Less than 1 hour
+        timeframe = f"{int(30 * round(minutes/30))}T"  # Round to nearest 30 minutes
+        display_name = f"{int(30 * round(minutes/30))}분봉"
+    elif minutes < 1440:  # Less than 1 day
+        hours = max(1, round(minutes / 60))
+        timeframe = f"{hours}H"
+        display_name = f"{hours}시간봉"
+    else:  # 1 day or more
+        timeframe = "1D"
+        display_name = "일봉"
+    
+    # Resample the data
+    resampled = df['total'].resample(timeframe).agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last'
+    }).dropna()
+    
+    return resampled, display_name
+
 def main():
     st.title('📈 Asset Value Dashboard')
     
     # Sidebar controls
     st.sidebar.header('Filters')
-    days = st.sidebar.slider('Time Range (days)', 7, 365, 60)
+    days = st.sidebar.slider('Time Range (days)', 7, 365, 150)
     
     # Fetch data
     df = fetch_asset_history(days)
@@ -123,13 +168,8 @@ def main():
     # Create candlestick chart
     st.markdown("### Asset Value (Candlestick Chart)")
     
-    # Resample data for candlesticks (daily)
-    df_resampled = df['total'].resample('D').agg({
-        'open': 'first',
-        'high': 'max',
-        'low': 'min',
-        'close': 'last'
-    }).dropna()
+    # Resample data based on the selected time range
+    df_resampled, time_frame = resample_data(df, days)
     
     # Create candlestick figure with reversed colors
     fig = go.Figure(data=[go.Candlestick(
@@ -142,9 +182,17 @@ def main():
         increasing_fillcolor='#F44366',   # Lighter red fill
         decreasing_line_color='#4CAF50',  # Green for decrease
         decreasing_fillcolor='#66BB6A',   # Lighter green fill
-        name='Candlestick',
+        name=f'Candlestick ({time_frame})',
         line=dict(width=1)
     )])
+    
+    # Add timeframe indicator
+    time_frame_map = {
+        '1min': '1분봉',
+        '1H': '1시간봉',
+        '1D': '일봉'
+    }
+    st.sidebar.markdown(f"**Timeframe:** {time_frame_map.get(time_frame, time_frame)}")
     
     # # Add volume (optional)
     # df_resampled['volume'] = df_resampled['close'] - df_resampled['open']
