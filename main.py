@@ -134,7 +134,7 @@ def use_case_02():
         SELECT * 
         FROM asset_total_history_report 
         ORDER BY "timestamp"
-        --LIMIT 5;
+        LIMIT 5;
     """  
     query_stmt_info = """
         SELECT count(*)
@@ -156,21 +156,29 @@ def use_case_03():
         SELECT * 
         FROM asset_total_history_report 
         ORDER BY "timestamp" DESC 
-        LIMIT 110
+        -- LIMIT 10
         """
         
         # Execute the query
         result_set = connection.execute(text(select_query))
         
-        # Print the results
+        # Get column names from the result set
+        columns = result_set.keys()
+        
+        # Print the results with column names
         for row in result_set:
-            print(row)
-            print(row[0], row[2])
+            # Create a dictionary of column name to value
+            row_dict = dict(zip(columns, row))
+            # Print the last two columns dynamically
+            last_two_columns = list(columns)[-2:]
+            print(", ".join(f"{col}: {row_dict[col]}" for col in last_two_columns))
 
 if __name__ == "__main__":
     print("=-"*10,"start!")
     get_table_info()
+    use_case_01()
     use_case_02()
+    use_case_03()
     print("=-"*10,"done!")
 
 
