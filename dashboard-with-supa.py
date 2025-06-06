@@ -11,7 +11,12 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import app.common.util as util
+import os
 from sqlalchemy import create_engine, text, MetaData
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 st.set_page_config(
     page_title="J.Tracking",
@@ -24,36 +29,13 @@ st.set_page_config(
 )
 
 
-# Define the connection string - jaysys project on SUPABASE
-PostgreSQL_CONN_STRING = "postgresql://--"
+# Get database URL from environment variables
+POSTGRES_CONN_STRING = os.getenv('DATABASE_URL')
+if not POSTGRES_CONN_STRING:
+    raise ValueError("DATABASE_URL not found in environment variables")
 
 # Create engine
-engine = create_engine(PostgreSQL_CONN_STRING)
-
-if False:   
-    meta = MetaData()
-    meta.reflect(bind=engine)
-
-    # 테이블 목록 가져오기
-    def get_table_names(meta=meta):
-        table_names = meta.tables.keys()
-        print("테이블 목록:")
-        for table_name in table_names:
-            print(table_name)
-
-    # 테이블 스키마 가져오기
-    def get_table_schema(table_name, meta=meta):
-        table = meta.tables.get(table_name)
-        if table is not None:
-            print(f"테이블 '{table_name}'의 스키마:")
-            for column in table.columns:
-                print(f"{column.name}: {column.type}")
-        else:
-            print(f"테이블 '{table_name}'가 존재하지 않습니다.")
-
-    # get_table_names()  # 모든 테이블 목록 출력
-    # get_table_schema("my_asset")  # 특정 테이블의 스키마 출력
-
+engine = create_engine(POSTGRES_CONN_STRING)
 
 # Function to execute SQL query
 def execute_query(stmt,engine=engine):
@@ -110,10 +92,6 @@ def collect_crypto_data(hourly_interval=24, ticker=''):
     }
     
     return (df, latest)
-# tkr = "SOL"
-# a, b = collect_crypto_data(hourly_interval=24, ticker=tkr)
-# print(f"Latest crypto {tkr} 'total_krw' on SUPABASE is {b}")
-
 
 
 '''

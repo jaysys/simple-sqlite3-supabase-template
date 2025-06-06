@@ -1,18 +1,15 @@
 import sqlite3
+import os
 from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # SQLite3 DB 연결 [SOURCE]
 sqlite_db_file = './db/m3_myasset.sqlite3'
 conn_sqlite = sqlite3.connect(sqlite_db_file)
 cursor_sqlite = conn_sqlite.cursor()
-'''
-sqlite> select * from my_asset limit 10;
-index  div     asset  qty               unit_usd              unit_krw     total_krw         asset_note           timestamp                 
------  ------  -----  ----------------  --------------------  -----------  ----------------  -------------------  --------------------------
-0      CRYPTO  MATIC  10002.6892886571  0.816                 1131.38      11316842.6074008  Metamask             2022-09-17 18:15:48.821894
-1      CRYPTO  SAND   0.0               0.88                  1220.11      0.0               Metamask             2022-09-17 18:15:48.821894
-2      CRYPTO  SAND   7263.3546710758   0.88                  1220.11      8862091.6677263   Sandbox Staked       2022-09-17 18:15:48.821894
-ß'''
 
 # SQLite3에서 이관할 데이터 조회 [SOURCE]
 select_query = "SELECT * FROM my_asset"
@@ -20,8 +17,11 @@ cursor_sqlite.execute(select_query)
 
 
 # PostgreSQL DB 연결 [TARGET]
-postgres_connection_string = "postgresql://postgres.blablablabla:dbpasswd@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres"
-engine_postgres = create_engine(postgres_connection_string)
+POSTGRES_CONN_STRING = os.getenv('DATABASE_URL')
+if not POSTGRES_CONN_STRING:
+    raise ValueError("DATABASE_URL not found in environment variables")
+
+engine_postgres = create_engine(POSTGRES_CONN_STRING)
 '''
 create table
   public.my_asset (
