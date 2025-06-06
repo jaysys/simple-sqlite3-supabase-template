@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # SQLite3 DB 연결 [SOURCE]
-sqlite_db_file = './db/m3_myasset.sqlite3'
+sqlite_db_file = 'myasset_sqlite3.db'
 conn_sqlite = sqlite3.connect(sqlite_db_file)
 cursor_sqlite = conn_sqlite.cursor()
 

@@ -115,7 +115,7 @@ def use_case_01():
         SELECT * 
         FROM asset_total_history_report 
         ORDER BY "timestamp"
-        -- LIMIT 5;
+        LIMIT 10;
     """  
     query_stmt_info = """
         SELECT count(*)
@@ -175,10 +175,10 @@ def use_case_03():
 
 if __name__ == "__main__":
     print("=-"*10,"start!")
-    get_table_info()
+    # get_table_info()
     use_case_01()
-    use_case_02()
-    use_case_03()
+    # use_case_02()
+    # use_case_03()
     print("=-"*10,"done!")
 
 
