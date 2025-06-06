@@ -98,7 +98,7 @@ def resample_data(df, days):
         display_name = f"{int(30 * round(minutes/30))}분봉"
     elif minutes < 1440:  # Less than 1 day
         hours = max(1, round(minutes / 60))
-        timeframe = f"{hours}H"
+        timeframe = f"{hours}h"  # Changed from 'H' to 'h' to fix deprecation warning
         display_name = f"{hours}시간봉"
     else:  # 1 day or more
         timeframe = "1D"
@@ -119,7 +119,7 @@ def main():
     
     # Sidebar controls
     st.sidebar.header('Filters')
-    days = st.sidebar.slider('Time Range (days)', 7, 365, 150)
+    days = st.sidebar.slider('Time Range (days)', 7, 365, 90)
     
     # Fetch data
     df = fetch_asset_history(days)
