@@ -5,7 +5,7 @@ import os
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-import plotly.express as px
+import plotly.graph_objects as go
 
 # Load environment variables from .env file
 load_dotenv()
@@ -120,34 +120,75 @@ def main():
             </div>
         ''', unsafe_allow_html=True)
     
-    # Create and display the chart
-    st.markdown("### Asset Value Over Time")
-    fig = px.line(
-        df.reset_index(),
-        x='timestamp',
-        y='total',
-        labels={'timestamp': 'Date', 'total': 'Total Value (₩)'},
-        height=500
-    )
+    # Create candlestick chart
+    st.markdown("### Asset Value (Candlestick Chart)")
     
-    # Customize hover data
-    fig.update_traces(
-        hovertemplate="""
-        <b>Date:</b> %{x|%Y-%m-%d %H:%M}<br>
-        <b>Value:</b> ₩%{y:,.0f}<extra></extra>
-        """
-    )
+    # Resample data for candlesticks (daily)
+    df_resampled = df['total'].resample('D').agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last'
+    }).dropna()
+    
+    # Create candlestick figure
+    fig = go.Figure(data=[go.Candlestick(
+        x=df_resampled.index,
+        open=df_resampled['open'],
+        high=df_resampled['high'],
+        low=df_resampled['low'],
+        close=df_resampled['close'],
+        increasing_line_color='#4CAF50',
+        decreasing_line_color='#F44336',
+        name='Candlestick'
+    )])
+    
+    # Add 7-day moving average
+    df_resampled['MA7'] = df_resampled['close'].rolling(window=7).mean()
+    fig.add_trace(go.Scatter(
+        x=df_resampled.index,
+        y=df_resampled['MA7'],
+        mode='lines',
+        name='7-Day MA',
+        line=dict(color='#FFA000', width=1.5)
+    ))
     
     # Customize layout
     fig.update_layout(
         xaxis_title=None,
-        yaxis_title=None,
+        yaxis_title='Total Value (₩)',
         hovermode='x unified',
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=True, gridcolor='#2d2d2d')
+        xaxis=dict(
+            showgrid=False,
+            rangeslider=dict(visible=False)
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='#2d2d2d',
+            fixedrange=False
+        ),
+        showlegend=True,
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='right',
+            x=1
+        )
+    )
+    
+    # Customize hover template for candlestick
+    fig.update_traces(
+        selector=dict(type='candlestick'),
+        hovertext=df_resampled.apply(
+            lambda x: f"Open: ₩{x['open']:,.0f}<br>High: ₩{x['high']:,.0f}<br>"
+                      f"Low: ₩{x['low']:,.0f}<br>Close: ₩{x['close']:,.0f}",
+            axis=1
+        ),
+        hoverinfo='text+x'
     )
     
     st.plotly_chart(fig, use_container_width=True)
