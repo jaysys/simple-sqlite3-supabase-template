@@ -74,7 +74,7 @@ def main():
     
     # Sidebar controls
     st.sidebar.header('Filters')
-    days = st.sidebar.slider('Time Range (days)', 7, 365, 30)
+    days = st.sidebar.slider('Time Range (days)', 7, 365, 60)
     
     # Fetch data
     df = fetch_asset_history(days)
@@ -131,17 +131,32 @@ def main():
         'close': 'last'
     }).dropna()
     
-    # Create candlestick figure
+    # Create candlestick figure with reversed colors
     fig = go.Figure(data=[go.Candlestick(
         x=df_resampled.index,
         open=df_resampled['open'],
         high=df_resampled['high'],
         low=df_resampled['low'],
         close=df_resampled['close'],
-        increasing_line_color='#4CAF50',
-        decreasing_line_color='#F44336',
-        name='Candlestick'
+        increasing_line_color='#F44336',  # Red for increase
+        increasing_fillcolor='#F44366',   # Lighter red fill
+        decreasing_line_color='#4CAF50',  # Green for decrease
+        decreasing_fillcolor='#66BB6A',   # Lighter green fill
+        name='Candlestick',
+        line=dict(width=1)
     )])
+    
+    # # Add volume (optional)
+    # df_resampled['volume'] = df_resampled['close'] - df_resampled['open']
+    # fig.add_trace(go.Bar(
+    #     x=df_resampled.index,
+    #     y=df_resampled['volume'],
+    #     name='Volume',
+    #     marker_color=['#4CAF50' if x >= 0 else '#F44336' for x in df_resampled['volume']],
+    #     opacity=0.3,
+    #     showlegend=False,
+    #     yaxis='y2'
+    # ))
     
     # Add 7-day moving average
     df_resampled['MA7'] = df_resampled['close'].rolling(window=7).mean()
@@ -168,7 +183,14 @@ def main():
         yaxis=dict(
             showgrid=True,
             gridcolor='#2d2d2d',
-            fixedrange=False
+            fixedrange=False,
+            title='Price (₩)'
+        ),
+        yaxis2=dict(
+            title='Volume',
+            overlaying='y',
+            side='right',
+            showgrid=False
         ),
         showlegend=True,
         legend=dict(
