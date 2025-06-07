@@ -1,21 +1,15 @@
 import os
-import time
 import pprint
 from sqlalchemy import create_engine, text, MetaData
 from dotenv import load_dotenv
-from supabase import create_client, Client
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Get database URL from environment variables
 CONNECTION_STRING = os.getenv('DATABASE_URL')
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-
-if not all([CONNECTION_STRING, SUPABASE_URL, SUPABASE_KEY]):
-    raise ValueError("Required environment variables not found. Please check DATABASE_URL, SUPABASE_URL, and SUPABASE_KEY")
-
-# Initialize Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+if not CONNECTION_STRING:
+    raise ValueError("DATABASE_URL not found in environment variables")
 
 def get_table_info():
     # Create an engine
@@ -99,9 +93,12 @@ def conn_db_and_exec_query(stmt):
 def fetch_one_many_all_from_exec_query(stmt):  
     result_set = conn_db_and_exec_query(stmt)
 
-    one = result_set.fetchone() #첫번째 1개 데이터
-    many = result_set.fetchmany(2) #다음 2개의 데이터
+    one = result_set.fetchone()
+    #print(one)
+    many = result_set.fetchmany(2)
+    #print(many)
     all = result_set.fetchall() #이미 fetch된게 있으면 그 다음부터 전체, fetch된게 없으면 처음부터 전체 데이터 넘겨받음
+    #print(all)
     return (one, many, all)
 
 
@@ -175,91 +172,12 @@ def use_case_03():
             last_two_columns = list(columns)[-2:]
             print(", ".join(f"{col}: {row_dict[col]}" for col in last_two_columns))
 
-
-def benchmark_sqlalchemy_query(table_name: str, limit: int = 1000) -> dict:
-    """Execute a simple SELECT query using SQLAlchemy and return timing information."""
-    start_time = time.time()
-    
-    engine = create_engine(CONNECTION_STRING)
-    with engine.connect() as conn:
-        # Simple select query
-        query = f"SELECT * FROM {table_name} LIMIT {limit}"
-        result = conn.execute(text(query))
-        rows = result.fetchall()
-        print(table_name, "rows", len(rows))
-    
-    end_time = time.time()
-    
-    return {
-        'method': 'SQLAlchemy',
-        'execution_time': end_time - start_time,
-        'rows_returned': len(rows),
-        'table': table_name,
-        'limit': limit
-    }
-
-def benchmark_supabase_query(table_name: str, limit: int = 1000) -> dict:
-    """Execute a simple SELECT query using Supabase client and return timing information."""
-    start_time = time.time()
-    
-    # Using Supabase client to fetch data
-    response = supabase.table(table_name).select('*').limit(limit).execute()
-    rows = response.data if hasattr(response, 'data') else []
-    print(table_name, "rows", len(rows))  
-
-    end_time = time.time()
-    
-    return {
-        'method': 'Supabase',
-        'execution_time': end_time - start_time,
-        'rows_returned': len(rows),
-        'table': table_name,
-        'limit': limit
-    }
-
-def run_benchmarks():
-    """Run benchmarks for both SQLAlchemy and Supabase clients."""
-    tables = ['asset_master', 'asset_total_history_report']
-    results = []
-    
-    for table in tables:
-        print("")
-        try:
-            # Warm-up run (not measured)
-            benchmark_sqlalchemy_query(table, limit=1)
-            benchmark_supabase_query(table, limit=1)
-            
-            # Actual benchmark runs
-            sqlalchemy_result = benchmark_sqlalchemy_query(table, limit=9_900_000)
-            supabase_result = benchmark_supabase_query(table, limit=9_900_000) # supabase client 를 이용하면 아무리 큰 limit 를 주더라도 1000개까지만 가져옴. 따라서 주의해야한다. 제대로 비교할려면 양 쪽 케이스 모두를 1000으로 설정해야한다.
-            results.extend([sqlalchemy_result, supabase_result])
-            
-            # Calculate and print comparison
-            faster = 'SQLAlchemy' if sqlalchemy_result['execution_time'] < supabase_result['execution_time'] else 'Supabase'
-            time_diff = abs(sqlalchemy_result['execution_time'] - supabase_result['execution_time'])
-            percentage = (time_diff / min(sqlalchemy_result['execution_time'], supabase_result['execution_time'])) * 100
-            
-            print(f"=== {table} Benchmark Results ===")
-            print(f"SQLAlchemy: {sqlalchemy_result['execution_time']:.4f} seconds")
-            print(f"Supabase:   {supabase_result['execution_time']:.4f} seconds")
-            print(f"{faster} is {percentage:.2f}% faster")
-            
-        except Exception as e:
-            print(f"Error benchmarking table {table}: {str(e)}")
-    
-    return results
-
 if __name__ == "__main__":
     print("=-"*10,"start!")
-    # Uncomment to see table info
     # get_table_info()
-    
-    # Example use cases 
-    # use_case_01()
+    use_case_01()
     # use_case_02()
     # use_case_03()
+    print("=-"*10,"done!")
 
-    # Run benchmarks
-    run_benchmarks()
 
-    print("\n","=-"*10,"done!")
