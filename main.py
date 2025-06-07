@@ -108,13 +108,6 @@ def execute_query(query: str, params: Optional[Dict] = None) -> CursorResult:
         return conn.execute(text(query), params or {})
 
 
-def fetch_all(query: str, params: Optional[Dict] = None) -> List[Dict]:
-    """Fetch all rows from a query"""
-    result = execute_query(query, params)
-    columns = result.keys()
-    return [dict(zip(columns, row)) for row in result.fetchall()]
-
-
 def fetch_one(query: str, params: Optional[Dict] = None) -> Optional[Dict]:
     """Fetch a single row from a query"""
     result = execute_query(query, params)
@@ -122,6 +115,13 @@ def fetch_one(query: str, params: Optional[Dict] = None) -> Optional[Dict]:
     if not row:
         return None
     return dict(zip(result.keys(), row))
+
+
+def fetch_all(query: str, params: Optional[Dict] = None) -> List[Dict]:
+    """Fetch all rows from a query"""
+    result = execute_query(query, params)
+    columns = result.keys()
+    return [dict(zip(columns, row)) for row in result.fetchall()]
 
 
 def fetch_one_many_all(query: str, params: Optional[Dict] = None) -> tuple:
@@ -141,6 +141,7 @@ def fetch_one_many_all(query: str, params: Optional[Dict] = None) -> tuple:
         next_two = result.fetchmany(2)
         remaining = result.fetchall()
         return first, next_two, remaining
+
 
 def paginate_query(
     query: str,
@@ -191,7 +192,6 @@ def paginate_query(
     )
 
 
-
 def row_to_dict(row):
     """Convert SQLAlchemy row to dictionary"""
     if row is None:
@@ -202,39 +202,43 @@ def row_to_dict(row):
         return dict(row._mapping)
     return dict(row)  # Fallback
 
+
 def example_queries() -> None:
     """Example queries demonstrating different ways to fetch data"""
-    # Example 1: Fetch first row and next two rows
+
+    # Example 1: Using pagination
+    print(" --> Example 1: Pagination")
+    paginated = paginate_query(
+        "SELECT * FROM asset_master ORDER BY timestamp DESC",
+        page=3,
+        per_page=20
+    )
+    print(f"Page {paginated.page} of {paginated.total_pages}")
+    print(f"Showing {len(paginated.items)} of {paginated.total} items")
+    print("First item:", row_to_dict(paginated.items[0]) if paginated.items else "No items")
+
+
+    # Example 2: Fetch first row and next two rows
     query1 = """
     SELECT * 
     FROM asset_total_history_report 
-    ORDER BY timestamp
+    ORDER BY timestamp DESC
     LIMIT 1000  -- Added limit for safety
     """
     first, next_two, remaining = fetch_one_many_all(query1)
     
-    print(" --> Example 1: Fetching Rows")
+    print("\n --> Example 2: Fetching Rows")
     print("First row:")
     print(row_to_dict(first) if first else 'No data')
     print("Next two rows:")
     print([row_to_dict(row) for row in next_two])
     print("Total rows:", len(remaining) + len(next_two) + (1 if first else 0))
     
-    # Example 2: Using pagination
-    print("\n --> Example 2: Pagination")
-    paginated = paginate_query(
-        "SELECT * FROM asset_master ORDER BY id",
-        page=1,
-        per_page=5
-    )
-    print(f"Page {paginated.page} of {paginated.total_pages}")
-    print(f"Showing {len(paginated.items)} of {paginated.total} items")
-    print("First item:", row_to_dict(paginated.items[0]) if paginated.items else "No items")
-    
+
     # Example 3: Parameterized query
     print("\n --> Example 3: Parameterized Query")
     result = fetch_one(
-        "SELECT * FROM asset_master WHERE asset_name = :asset_name",
+        "SELECT * FROM asset_master WHERE asset_name = :asset_name ORDER BY timestamp DESC",
         params={"asset_name": "BTC"}
     )
     print("BTC details:", row_to_dict(result) if result else "Not found")
