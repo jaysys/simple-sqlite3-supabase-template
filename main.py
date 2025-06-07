@@ -1,265 +1,340 @@
 import os
-import time
-import pprint
-from sqlalchemy import create_engine, text, MetaData
+from typing import Dict, List, Optional, Any
+from sqlalchemy import create_engine, text, MetaData, inspect
+from sqlalchemy.engine import CursorResult
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from dataclasses import dataclass
+from rich import print
 
 # Load environment variables from .env file
 load_dotenv()
 CONNECTION_STRING = os.getenv('DATABASE_URL')
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
-if not all([CONNECTION_STRING, SUPABASE_URL, SUPABASE_KEY]):
-    raise ValueError("Required environment variables not found. Please check DATABASE_URL, SUPABASE_URL, and SUPABASE_KEY")
+if not CONNECTION_STRING:
+    raise ValueError("DATABASE_URL environment variable not found")
 
-# Initialize Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Create SQLAlchemy engine
+engine = create_engine(CONNECTION_STRING)
 
-def get_table_info():
-    # Create an engine
-    engine = create_engine(CONNECTION_STRING)
-    conn = engine.connect()
-    
-    # 메타데이터 객체 생성 및 리플렉션
+@dataclass
+class PaginationResult:
+    """Pagination result container"""
+    items: List[Dict[str, Any]]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+
+
+def get_table_info() -> None:
+    """Print database schema information including tables and views"""
     meta = MetaData()
-    meta.reflect(bind=engine, views=True)  # views=True로 뷰도 포함
+    meta.reflect(bind=engine, views=True)
     
-    # 데이터베이스에서 뷰 목록 조회
-    view_query = """
-    SELECT table_name 
-    FROM information_schema.views 
-    WHERE table_schema = 'public';
-    """
-    
-    # 테이블과 뷰 정보 출력
-    def print_database_objects(meta, conn):
-        # 테이블 목록 출력
-        print("\n=== 테이블 목록 ===")
-        for table_name in meta.tables.keys():
-            print(f"테이블: {table_name}")
+    with engine.connect() as conn:
+        # Get list of views
+        view_query = text("""
+            SELECT table_name 
+            FROM information_schema.views 
+            WHERE table_schema = 'public';
+        """)
         
-        # 뷰 목록 조회 및 출력
-        print("\n=== 뷰 목록 ===")
-        result = conn.execute(text(view_query))
-        views = [row[0] for row in result]
+        # Print tables
+        print("\n=== Tables ===")
+        for table_name in meta.tables:
+            print(f"Table: {table_name}")
         
+        # Print views
+        print("\n=== Views ===")
+        views = [row[0] for row in conn.execute(view_query)]
         if not views:
-            print("뷰가 존재하지 않습니다.")
+            print("No views found.")
         else:
             for view_name in views:
-                print(f"뷰: {view_name}")
+                print(f"View: {view_name}")
+
+
+def get_table_schema(table_name: str) -> None:
+    """Print schema information for a specific table or view"""
+    inspector = MetaData()
     
-    # 테이블/뷰 스키마 출력
-    def get_object_schema(object_name, meta=meta, conn=conn):
-        # 테이블인지 확인
-        if object_name in meta.tables:
-            table = meta.tables[object_name]
-            print(f"\n=== 테이블 '{object_name}' 스키마 ===")
-            for column in table.columns:
-                print(f"{column.name}: {column.type}")
-        else:
-            # 뷰인지 확인
-            view_check = """
+    with engine.connect() as conn:
+        # Check if table exists
+        table_query = text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = :table_name;
+        """)
+        
+        # Check if view exists
+        view_query = text("""
             SELECT table_name 
             FROM information_schema.views 
             WHERE table_schema = 'public' AND table_name = :view_name;
-            """
-            result = conn.execute(text(view_check), {'view_name': object_name}).fetchone()
-            
-            if result:
-                # 뷰의 컬럼 정보 조회
-                view_columns = """
+        """)
+        
+        table_exists = conn.execute(table_query, {"table_name": table_name}).fetchone()
+        view_exists = conn.execute(view_query, {"view_name": table_name}).fetchone()
+        
+        if table_exists:
+            print(f"\n=== Table '{table_name}' Schema ===")
+            columns_query = text("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = :table_name
+                ORDER BY ordinal_position;
+            """)
+            columns = conn.execute(columns_query, {"table_name": table_name})
+            for col in columns:
+                print(f"{col[0]}: {col[1]}")
+                
+        elif view_exists:
+            print(f"\n=== View '{table_name}' Schema ===")
+            columns_query = text("""
                 SELECT column_name, data_type
                 FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = :view_name
                 ORDER BY ordinal_position;
-                """
-                columns = conn.execute(text(view_columns), {'view_name': object_name})
-                print(f"\n=== 뷰 '{object_name}' 스키마 ===")
-                for col in columns:
-                    print(f"{col[0]}: {col[1]}")
-            else:
-                print(f"\n'{object_name}' 테이블/뷰를 찾을 수 없습니다.")
-    
-    # 모든 객체 정보 출력
-    print_database_objects(meta, conn)
-    
-    # 특정 테이블/뷰 스키마 확인 (예시로 'asset_master'와 'asset_total_history_report' 확인)
-    get_object_schema("asset_master")
-    get_object_schema("asset_total_history_report")
+            """)
+            columns = conn.execute(columns_query, {"view_name": table_name})
+            for col in columns:
+                print(f"{col[0]}: {col[1]}")
+        else:
+            print(f"\nTable or view '{table_name}' not found.")
 
-def conn_db_and_exec_query(stmt):
-    engine = create_engine(CONNECTION_STRING)    
+def execute_query(query: str, params: Optional[Dict] = None) -> CursorResult:
+    """Execute a raw SQL query and return the result"""
     with engine.connect() as conn:
-        result_set = conn.execute(text(stmt))
-        return result_set
-
-def fetch_one_many_all_from_exec_query(stmt):  
-    result_set = conn_db_and_exec_query(stmt)
-
-    one = result_set.fetchone() #첫번째 1개 데이터
-    many = result_set.fetchmany(2) #다음 2개의 데이터
-    all = result_set.fetchall() #이미 fetch된게 있으면 그 다음부터 전체, fetch된게 없으면 처음부터 전체 데이터 넘겨받음
-    return (one, many, all)
+        return conn.execute(text(query), params or {})
 
 
-def fetch_all_from_exec_query(stmt):  
-    result_set = conn_db_and_exec_query(stmt)
-
-    all = result_set.fetchall() 
-    return (all)
-
-
-def use_case_01():
-    query_stmt = """
-        SELECT * 
-        FROM asset_total_history_report 
-        ORDER BY "timestamp"
-        LIMIT 10;
-    """  
-    query_stmt_info = """
-        SELECT count(*)
-        FROM asset_total_history_report ;
-    """  
-    data = fetch_one_many_all_from_exec_query(query_stmt)
-    data_info = fetch_one_many_all_from_exec_query(query_stmt_info)
-
-    pprint.pprint(data)
-    print("size", len(data[2]))
-    pprint.pprint(data_info)
+def fetch_all(query: str, params: Optional[Dict] = None) -> List[Dict]:
+    """Fetch all rows from a query"""
+    result = execute_query(query, params)
+    columns = result.keys()
+    return [dict(zip(columns, row)) for row in result.fetchall()]
 
 
-def use_case_02():
-    query_stmt = """
-        SELECT * 
-        FROM asset_total_history_report 
-        ORDER BY "timestamp"
-        LIMIT 5;
-    """  
-    query_stmt_info = """
-        SELECT count(*)
-        FROM asset_total_history_report ;
-    """  
-    data = fetch_all_from_exec_query(query_stmt)
-    data_info = fetch_all_from_exec_query(query_stmt_info)
-
-    pprint.pprint(data)
-    print("size", len(data))
-    pprint.pprint(data_info)
+def fetch_one(query: str, params: Optional[Dict] = None) -> Optional[Dict]:
+    """Fetch a single row from a query"""
+    result = execute_query(query, params)
+    row = result.fetchone()
+    if not row:
+        return None
+    return dict(zip(result.keys(), row))
 
 
-def use_case_03():
-    engine = create_engine(CONNECTION_STRING) 
-    with engine.connect() as connection:
-        # Build the select query
-        select_query = """
-        SELECT * 
-        FROM asset_total_history_report 
-        ORDER BY "timestamp" DESC 
-        -- LIMIT 10
-        """
+def fetch_one_many_all(query: str, params: Optional[Dict] = None) -> tuple:
+    """
+    Execute a query and return (one, many, all) results
+    
+    Args:
+        query: SQL query string
+        params: Optional query parameters
         
-        # Execute the query
-        result_set = connection.execute(text(select_query))
-        
-        # Get column names from the result set
-        columns = result_set.keys()
-        
-        # Print the results with column names
-        for row in result_set:
-            # Create a dictionary of column name to value
-            row_dict = dict(zip(columns, row))
-            # Print the last two columns dynamically
-            last_two_columns = list(columns)[-2:]
-            print(", ".join(f"{col}: {row_dict[col]}" for col in last_two_columns))
+    Returns:
+        tuple: (first_row, next_two_rows, remaining_rows)
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(query), params or {})
+        first = result.fetchone()
+        next_two = result.fetchmany(2)
+        remaining = result.fetchall()
+        return first, next_two, remaining
+
+def paginate_query(
+    query: str,
+    page: int = 1,
+    per_page: int = 100,
+    params: Optional[Dict] = None,
+    count_query: Optional[str] = None
+) -> PaginationResult:
+    """
+    Execute a paginated query
+    
+    Args:
+        query: Base SQL query (without LIMIT/OFFSET)
+        page: Page number (1-based)
+        per_page: Items per page
+        params: Query parameters
+        count_query: Optional custom count query. If not provided, 
+                   will be generated from the base query
+    
+    Returns:
+        PaginationResult object with items and pagination info
+    """
+    if page < 1:
+        page = 1
+    
+    offset = (page - 1) * per_page
+    
+    # Add pagination to the query
+    paginated_query = f"{query} LIMIT {per_page} OFFSET {offset}"
+    
+    # Execute the paginated query
+    items = fetch_all(paginated_query, params)
+    
+    # Get total count
+    if not count_query:
+        # Simple count query generation (may not work for all SQL)
+        count_query = f"SELECT COUNT(*) AS count FROM ({query}) AS subquery"
+    
+    total = fetch_one(count_query, params)['count']
+    total_pages = (total + per_page - 1) // per_page
+    
+    return PaginationResult(
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages
+    )
 
 
-def benchmark_sqlalchemy_query(table_name: str, limit: int = 1000) -> dict:
-    """Execute a simple SELECT query using SQLAlchemy and return timing information."""
+
+def row_to_dict(row):
+    """Convert SQLAlchemy row to dictionary"""
+    if row is None:
+        return None
+    if hasattr(row, '_asdict'):  # For SQLAlchemy 1.4+
+        return row._asdict()
+    elif hasattr(row, '_mapping'):  # For SQLAlchemy 1.4+ with future=True
+        return dict(row._mapping)
+    return dict(row)  # Fallback
+
+def example_queries() -> None:
+    """Example queries demonstrating different ways to fetch data"""
+    # Example 1: Fetch first row and next two rows
+    query1 = """
+    SELECT * 
+    FROM asset_total_history_report 
+    ORDER BY timestamp
+    LIMIT 1000  -- Added limit for safety
+    """
+    first, next_two, remaining = fetch_one_many_all(query1)
+    
+    print(" --> Example 1: Fetching Rows")
+    print("First row:")
+    print(row_to_dict(first) if first else 'No data')
+    print("Next two rows:")
+    print([row_to_dict(row) for row in next_two])
+    print("Total rows:", len(remaining) + len(next_two) + (1 if first else 0))
+    
+    # Example 2: Using pagination
+    print("\n --> Example 2: Pagination")
+    paginated = paginate_query(
+        "SELECT * FROM asset_master ORDER BY id",
+        page=1,
+        per_page=5
+    )
+    print(f"Page {paginated.page} of {paginated.total_pages}")
+    print(f"Showing {len(paginated.items)} of {paginated.total} items")
+    print("First item:", row_to_dict(paginated.items[0]) if paginated.items else "No items")
+    
+    # Example 3: Parameterized query
+    print("\n --> Example 3: Parameterized Query")
+    result = fetch_one(
+        "SELECT * FROM asset_master WHERE asset_name = :asset_name",
+        params={"asset_name": "BTC"}
+    )
+    print("BTC details:", row_to_dict(result) if result else "Not found")
+
+
+def benchmark_query(table_name: str, limit: int = 1000) -> Dict[str, Any]:
+    """
+    Execute a benchmark query and return timing information
+    
+    Args:
+        table_name: Name of the table to query
+        limit: Maximum number of rows to return
+        
+    Returns:
+        Dict containing benchmark results
+    """
+    import time
+    
+    # Simple select query
+    query = f"SELECT * FROM {table_name} LIMIT {limit}"
+    
+    # Time the query
     start_time = time.time()
-    
-    engine = create_engine(CONNECTION_STRING)
     with engine.connect() as conn:
-        # Simple select query
-        query = f"SELECT * FROM {table_name} LIMIT {limit}"
         result = conn.execute(text(query))
         rows = result.fetchall()
-        print(table_name, "rows", len(rows))
     
-    end_time = time.time()
-    
-    return {
-        'method': 'SQLAlchemy',
-        'execution_time': end_time - start_time,
-        'rows_returned': len(rows),
-        'table': table_name,
-        'limit': limit
-    }
-
-def benchmark_supabase_query(table_name: str, limit: int = 1000) -> dict:
-    """Execute a simple SELECT query using Supabase client and return timing information."""
-    start_time = time.time()
-    
-    # Using Supabase client to fetch data
-    response = supabase.table(table_name).select('*').limit(limit).execute()
-    rows = response.data if hasattr(response, 'data') else []
-    print(table_name, "rows", len(rows))  
-
-    end_time = time.time()
+    execution_time = time.time() - start_time
     
     return {
-        'method': 'Supabase',
-        'execution_time': end_time - start_time,
+        'execution_time': execution_time,
         'rows_returned': len(rows),
         'table': table_name,
-        'limit': limit
+        'limit': limit,
+        'rows_per_second': len(rows) / execution_time if execution_time > 0 else 0
     }
 
-def run_benchmarks(limit: int = 900):
-    """Run benchmarks for both SQLAlchemy and Supabase clients."""
-    tables = ['asset_master', 'asset_total_history_report']
+
+def run_benchmark(table_names: List[str] = None, limit: int = 1000) -> List[Dict[str, Any]]:
+    """
+    Run benchmark queries on specified tables
+    
+    Args:
+        table_names: List of table names to benchmark (default: ['asset_master', 'asset_total_history_report'])
+        limit: Maximum number of rows to fetch in each query
+        
+    Returns:
+        List of benchmark results
+    """
+    if table_names is None:
+        table_names = ['asset_master', 'asset_total_history_report']
+    
     results = []
     
-    for table in tables:
-        print("")
+    for table in table_names:
         try:
-            # Warm-up run (not measured)
-            benchmark_sqlalchemy_query(table, limit=1)
-            benchmark_supabase_query(table, limit=1)
+            print(f"\n=== Benchmarking {table} ===")
             
-            # Actual benchmark runs
-            sqlalchemy_result = benchmark_sqlalchemy_query(table, limit=limit)
-            supabase_result = benchmark_supabase_query(table, limit=limit) # supabase client 를 이용하면 아무리 큰 limit 를 주더라도 1000개까지만 가져옴. 따라서 주의해야한다. 제대로 비교할려면 양 쪽 케이스 모두를 1000으로 설정해야한다.
-            results.extend([sqlalchemy_result, supabase_result])
+            # Warm-up run
+            print("Running warm-up...")
+            benchmark_query(table, limit=1)
             
-            # Calculate and print comparison
-            faster = 'SQLAlchemy' if sqlalchemy_result['execution_time'] < supabase_result['execution_time'] else 'Supabase'
-            time_diff = abs(sqlalchemy_result['execution_time'] - supabase_result['execution_time'])
-            percentage = (time_diff / min(sqlalchemy_result['execution_time'], supabase_result['execution_time'])) * 100
+            # Actual benchmark
+            print("Running benchmark...")
+            result = benchmark_query(table, limit=limit)
+            results.append(result)
             
-            print(f"=== {table} Benchmark Results ===")
-            print(f"SQLAlchemy: {sqlalchemy_result['execution_time']:.4f} seconds")
-            print(f"Supabase:   {supabase_result['execution_time']:.4f} seconds")
-            print(f"{faster} is {percentage:.2f}% faster")
+            # Print results
+            print(f"Results for {table}:")
+            print(f"Execution time: {result['execution_time']:.4f} seconds")
+            print(f"Rows returned: {result['rows_returned']}")
+            print(f"Rows per second: {result['rows_per_second']:.2f}")
             
         except Exception as e:
             print(f"Error benchmarking table {table}: {str(e)}")
     
     return results
 
+
 if __name__ == "__main__":
-    print("=-"*10,"start!")
-    # Uncomment to see table info
-    # get_table_info()
     
-    # Example use cases 
-    # use_case_01()
-    # use_case_02()
-    # use_case_03()
+    try:
+        # # Show database information
+        # print("\n**** Database Information ****")
+        # get_table_info()
+        
+        # # Show schema for asset_master
+        # print("\n**** Table Schema ****")
+        # get_table_schema("asset_master")
+        
+        # Run benchmark
+        print("\n**** Running Benchmarks ****")
+        run_benchmark(limit=10_000_000)
+        
+        # Run example queries
+        print("\n**** Example Queries ****")
+        example_queries()
 
-    # Run benchmarks
-    run_benchmarks()
 
-    print("\n","=-"*10,"done!")
+    except Exception as e:
+        print(f"\nError: {e}")
+    
+
