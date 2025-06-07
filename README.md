@@ -30,16 +30,18 @@ A Python tool for comparing query performance between SQLAlchemy and Supabase cl
 ## Setup
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd simple-sqlite3-supabase-template
    ```
 
 2. **Create and activate virtual environment**
+
    ```bash
    # Create virtual environment
    python -m venv .venv
-   
+
    # Activate virtual environment
    # On macOS/Linux:
    source .venv/bin/activate
@@ -48,6 +50,7 @@ A Python tool for comparing query performance between SQLAlchemy and Supabase cl
    ```
 
 3. **Install dependencies**
+
    ```bash
    pip install -r requirements.txt
    ```
@@ -76,18 +79,25 @@ python main.py
 ```
 
 This will:
+
 1. Test both `asset_master` and `asset_total_history_report` tables
 2. Show execution times for both SQLAlchemy and Supabase client
 3. Display performance comparison
 
 ### Example Output
+
 ```
+# Actual benchmark runs
+sqlalchemy_result = benchmark_sqlalchemy_query(table, limit=9_900_000)
+supabase_result = benchmark_supabase_query(table, limit=9_900_000) # supabase client 를 이용하면 아무리 큰 limit 를 주더라도 1000개까지만 가져옴. 따라서 주의해야한다. 제대로 비교할려면 양 쪽 케이스 모두를 1000으로 설정해야한다.
+results.extend([sqlalchemy_result, supabase_result])
+
 =-=-=-=-=-=-=-=-=-=- start!
 
 asset_master rows 1
 asset_master rows 1
 asset_master rows 2017612
-asset_master rows 1000
+asset_master rows 1000  <== limit
 === asset_master Benchmark Results ===
 SQLAlchemy: 8.19 seconds
 Supabase:   0.19 seconds
@@ -96,7 +106,7 @@ Supabase is 4187.01% faster
 asset_total_history_report rows 1
 asset_total_history_report rows 1
 asset_total_history_report rows 88393
-asset_total_history_report rows 1000
+asset_total_history_report rows 1000  <== limit
 === asset_total_history_report Benchmark Results ===
 SQLAlchemy: 0.82 seconds
 Supabase:   0.75 seconds
@@ -143,6 +153,7 @@ one, many, all_results = fetch_one_many_all_from_exec_query(query)
 - psycopg2-binary >= 2.9.9
 - python-dotenv >= 1.0.0
 - supabase >= 2.0.0
+
 ```python
 from main import fetch_one_many_all_from_exec_query
 
@@ -151,6 +162,7 @@ one, many, all_results = fetch_one_many_all_from_exec_query(query)
 ```
 
 #### Fetch all results:
+
 ```python
 from main import fetch_all_from_exec_query
 
@@ -161,11 +173,12 @@ results = fetch_all_from_exec_query(query)
 ### Example Use Cases
 
 1. **Basic Query Execution**:
+
    ```python
    # In use_case_01()
    query = """
-   SELECT * 
-   FROM asset_total_history_report 
+   SELECT *
+   FROM asset_total_history_report
    ORDER BY "timestamp"
    """
    data = fetch_one_many_all_from_exec_query(query)
