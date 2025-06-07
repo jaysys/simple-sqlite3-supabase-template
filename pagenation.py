@@ -102,26 +102,40 @@ def get_table_schema(table_name: str) -> None:
         else:
             print(f"\nTable or view '{table_name}' not found.")
 
-def execute_query(query: str, params: Optional[Dict] = None) -> CursorResult:
-    """Execute a raw SQL query and return the result"""
-    with engine.connect() as conn:
-        return conn.execute(text(query), params or {})
-
-
 def fetch_one(query: str, params: Optional[Dict] = None) -> Optional[Dict]:
-    """Fetch a single row from a query"""
-    result = execute_query(query, params)
-    row = result.fetchone()
-    if not row:
-        return None
-    return dict(zip(result.keys(), row))
+    """
+    Fetch a single row from a query
+    
+    Args:
+        query: SQL query string
+        params: Optional query parameters
+        
+    Returns:
+        Dictionary containing the first row of results, or None if no results
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(query), params or {})
+        row = result.fetchone()
+        if not row:
+            return None
+        return dict(zip(result.keys(), row))
 
 
 def fetch_all(query: str, params: Optional[Dict] = None) -> List[Dict]:
-    """Fetch all rows from a query"""
-    result = execute_query(query, params)
-    columns = result.keys()
-    return [dict(zip(columns, row)) for row in result.fetchall()]
+    """
+    Fetch all rows from a query
+    
+    Args:
+        query: SQL query string
+        params: Optional query parameters
+        
+    Returns:
+        List of dictionaries, each representing a row
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(query), params or {})
+        columns = result.keys()
+        return [dict(zip(columns, row)) for row in result.fetchall()]
 
 
 def fetch_one_many_all(query: str, params: Optional[Dict] = None) -> tuple:

@@ -25,103 +25,40 @@ class PaginationResult:
     per_page: int
     total_pages: int
 
-
-def get_table_info() -> None:
-    """Print database schema information including tables and views"""
-    meta = MetaData()
-    meta.reflect(bind=engine, views=True)
-    
-    with engine.connect() as conn:
-        # Get list of views
-        view_query = text("""
-            SELECT table_name 
-            FROM information_schema.views 
-            WHERE table_schema = 'public';
-        """)
-        
-        # Print tables
-        print("\n=== Tables ===")
-        for table_name in meta.tables:
-            print(f"Table: {table_name}")
-        
-        # Print views
-        print("\n=== Views ===")
-        views = [row[0] for row in conn.execute(view_query)]
-        if not views:
-            print("No views found.")
-        else:
-            for view_name in views:
-                print(f"View: {view_name}")
-
-
-def get_table_schema(table_name: str) -> None:
-    """Print schema information for a specific table or view"""
-    inspector = MetaData()
-    
-    with engine.connect() as conn:
-        # Check if table exists
-        table_query = text("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' AND table_name = :table_name;
-        """)
-        
-        # Check if view exists
-        view_query = text("""
-            SELECT table_name 
-            FROM information_schema.views 
-            WHERE table_schema = 'public' AND table_name = :view_name;
-        """)
-        
-        table_exists = conn.execute(table_query, {"table_name": table_name}).fetchone()
-        view_exists = conn.execute(view_query, {"view_name": table_name}).fetchone()
-        
-        if table_exists:
-            print(f"\n=== Table '{table_name}' Schema ===")
-            columns_query = text("""
-                SELECT column_name, data_type
-                FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = :table_name
-                ORDER BY ordinal_position;
-            """)
-            columns = conn.execute(columns_query, {"table_name": table_name})
-            for col in columns:
-                print(f"{col[0]}: {col[1]}")
-                
-        elif view_exists:
-            print(f"\n=== View '{table_name}' Schema ===")
-            columns_query = text("""
-                SELECT column_name, data_type
-                FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = :view_name
-                ORDER BY ordinal_position;
-            """)
-            columns = conn.execute(columns_query, {"view_name": table_name})
-            for col in columns:
-                print(f"{col[0]}: {col[1]}")
-        else:
-            print(f"\nTable or view '{table_name}' not found.")
-
-def execute_query(query: str, params: Optional[Dict] = None) -> CursorResult:
-    """Execute a raw SQL query and return the result"""
-    with engine.connect() as conn:
-        return conn.execute(text(query), params or {})
-
-
 def fetch_one(query: str, params: Optional[Dict] = None) -> Optional[Dict]:
-    """Fetch a single row from a query"""
-    result = execute_query(query, params)
-    row = result.fetchone()
-    if not row:
-        return None
-    return dict(zip(result.keys(), row))
+    """
+    Fetch a single row from a query
+    
+    Args:
+        query: SQL query string
+        params: Optional query parameters
+        
+    Returns:
+        Dictionary containing the first row of results, or None if no results
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(query), params or {})
+        row = result.fetchone()
+        if not row:
+            return None
+        return dict(zip(result.keys(), row))
 
 
 def fetch_all(query: str, params: Optional[Dict] = None) -> List[Dict]:
-    """Fetch all rows from a query"""
-    result = execute_query(query, params)
-    columns = result.keys()
-    return [dict(zip(columns, row)) for row in result.fetchall()]
+    """
+    Fetch all rows from a query
+    
+    Args:
+        query: SQL query string
+        params: Optional query parameters
+        
+    Returns:
+        List of dictionaries, each representing a row
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text(query), params or {})
+        columns = result.keys()
+        return [dict(zip(columns, row)) for row in result.fetchall()]
 
 
 def fetch_one_many_all(query: str, params: Optional[Dict] = None) -> tuple:
@@ -321,17 +258,9 @@ def run_benchmark(table_names: List[str] = None, limit: int = 1000) -> List[Dict
 if __name__ == "__main__":
     
     try:
-        # # Show database information
-        # print("\n**** Database Information ****")
-        # get_table_info()
-        
-        # # Show schema for asset_master
-        # print("\n**** Table Schema ****")
-        # get_table_schema("asset_master")
-        
-        # # Run benchmark
-        # print("\n**** Running Benchmarks ****")
-        # run_benchmark(limit=10_000_000)
+        # Run benchmark
+        print("\n**** Running Benchmarks ****")
+        run_benchmark(limit=10_000_000)
         
         # Run example queries
         print("\n**** Example Queries ****")
