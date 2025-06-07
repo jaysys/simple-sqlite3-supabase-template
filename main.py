@@ -217,7 +217,7 @@ def benchmark_supabase_query(table_name: str, limit: int = 1000) -> dict:
         'limit': limit
     }
 
-def run_benchmarks():
+def run_benchmarks(limit: int = 900):
     """Run benchmarks for both SQLAlchemy and Supabase clients."""
     tables = ['asset_master', 'asset_total_history_report']
     results = []
@@ -230,8 +230,8 @@ def run_benchmarks():
             benchmark_supabase_query(table, limit=1)
             
             # Actual benchmark runs
-            sqlalchemy_result = benchmark_sqlalchemy_query(table, limit=9_900_000)
-            supabase_result = benchmark_supabase_query(table, limit=9_900_000) # supabase client 를 이용하면 아무리 큰 limit 를 주더라도 1000개까지만 가져옴. 따라서 주의해야한다. 제대로 비교할려면 양 쪽 케이스 모두를 1000으로 설정해야한다.
+            sqlalchemy_result = benchmark_sqlalchemy_query(table, limit=limit)
+            supabase_result = benchmark_supabase_query(table, limit=limit) # supabase client 를 이용하면 아무리 큰 limit 를 주더라도 1000개까지만 가져옴. 따라서 주의해야한다. 제대로 비교할려면 양 쪽 케이스 모두를 1000으로 설정해야한다.
             results.extend([sqlalchemy_result, supabase_result])
             
             # Calculate and print comparison
